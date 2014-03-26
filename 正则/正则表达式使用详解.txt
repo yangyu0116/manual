@@ -1,0 +1,3 @@
+http://deerchao.net/tutorials/regex/regex.htm
+
+http://www.newasp.net/tech/php/6592.html

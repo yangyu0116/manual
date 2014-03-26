@@ -1,0 +1,25 @@
+函数名: vfprintf 
+功 能: 送格式化输出到一流中 
+用 法: int vfprintf(FILE *stream, char *format, va_list param); 
+程序例: 
+
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <stdarg.h> 
+
+FILE *fp; 
+
+int vfpf(char *fmt, ...) 
+{ 
+va_list argptr; 
+int cnt; 
+
+va_start(argptr, fmt); 
+cnt = vfprintf(fp, fmt, argptr); 
+va_end(argptr); 
+
+return(cnt); 
+} 
+
+int main(void) 
+

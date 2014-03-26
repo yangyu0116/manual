@@ -1,0 +1,33 @@
+PHP+MYSQL出错(#2013 - Lost connection to MySQL server during query)     
+偶这些天用PHP+MYSQL开发一个项目(PHP5+MYSQL5),
+在同一个页面上不关闭数据库连接时多次调用Mysql存储过程出错,信息如下:
+
+(ERROR 2013: - Lost connection to MySQL server during query),
+
+如果在一个页面上只调用一次查询,就很顺利,调多次时就出有问题.
+
+     在Google上查找一下:给出方法是:要改配置文件   
+     set-variable=thread_stack=256k   
+     结果依然不行
+
+经过我两个小时的折腾时发现原来是:Client API Version 
+
+必须要在5.0.15版本以上 可通过 PHP中的 PHPINFO()查看.
+
+为什么我的要5.0以上(因为我是用Mysql5的存储过程返回结果集,Mysql5才开始支持存储过程,并且要PHP5以上的版本才能支持),安装的时候还要以 模块的安装方式:
+
+Apache2 的 Httpd.conf 文件这样配置:
+
+LoadModule php5_module modules/php5apache2.dll
+AddType application/x-httpd-php .php 
+
+(前题是你要将:php5ts.dll php5apache2.dll libmysql.dll[5.0的版本的哦]
+
+放到Apache安装目录下modules文件夹里,然后将php.ini 文件放到Apache安装目录下bin文件夹里,最好不要将libmysql.dll不要放到其它系统环境目录下,由其windows不要放到%systemroot%目录下)
+
+我就是这么的,因为我是两个版本的PHP(4和5)共存,我就将4.4的libmysql.dll 放到系统目录下所以出现上面的问题.
+
+实际上是检查 客户端API版本.
+
+完了,希望遇到同样的问题的朋友少折腾 
+

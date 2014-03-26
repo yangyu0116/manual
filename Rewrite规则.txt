@@ -1,0 +1,714 @@
+http://www.kreny.com/docs/apache2.0/mod/mod_rewrite.html#rewriterule
+
+
+————————————————————————————————————————
+
+
+Apache模块 mod_rewrite
+说明: 提供了一个基于规则的实时转向URL请求的引擎 
+状态: Extension 
+模块名: rewrite_module 
+源文件: mod_rewrite.c 
+兼容性: 包含在Apache 1.3及其更新版本中 
+
+概要
+``The great thing about mod_rewrite is it gives you all the configurability and flexibility of Sendmail. The downside to mod_rewrite is that it gives you all the configurability and flexibility of Sendmail.''
+
+-- Brian Behlendorf
+Apache Group
+
+`` Despite the tons of examples and docs, mod_rewrite is voodoo. Damned cool voodoo, but still voodoo. ''
+
+-- Brian Moore
+bem@news.cmc.net
+
+欢迎来到mod_rewrite, URL操作的瑞士军刀!
+
+此模块提供了一个基于规则的(使用正则表达式分析器的)实时转向URL请求的引擎。 支持每个规则可以拥有不限数量的规则以及附加条件规则的灵活而且强大的URL操作机制。 此URL操作可以取决于各种测试，比如服务器变量、环境变量、HTTP头、时间标记， 甚至各种格式的用于匹配URL组成部分的查找数据库。
+
+此模块可以操作URL的所有部分(包括路径信息部分)， 在服务器级的(httpd.conf)和目录级的(.htaccess)配置都有效， 还可以生成最终请求串。此重写操作的结果可以是内部子处理，也可以是外部请求的转向， 甚至还可以是内部代理处理。
+
+但是，所有这些功能和灵活性带来一个问题，那就是复杂性， 因此，不要指望一天之内就能看懂整个模块。
+
+此模块从1997年7月起为Apache Group所专用，由以下这些人创建于1996年4月
+
+Ralf S. Engelschall
+rse@engelschall.com
+www.engelschall.com 
+
+指令索引
+ RewriteBase 
+ RewriteCond 
+ RewriteEngine 
+ RewriteLock 
+ RewriteLog 
+ RewriteLogLevel 
+ RewriteMap 
+ RewriteOptions 
+ RewriteRule 
+主题
+ 内部处理 
+ 环境变量 
+ 实用方案 
+
+内部处理
+此模块的内部处理极为复杂，但是，为了使一般用户避免犯低级错误， 也让管理员能充分利用其功能，在此仍然做一下说明。
+
+API程序段
+首先，你必须了解，Apache是通过若干程序段来处理HTTP请求的。 Apache API 对每个程序段提供了一个hook程序。 Mod_rewrite使用两个hook程序： 其一是，URL到文件名的转译hook，用在读取HTTP请求之后，而在授权开始之前； 其二是，修正hook，用在授权程序段和读取目录级配置文件(.htaccess)之后， 而在内容处理器激活之前。
+
+所以，Apache收到一个请求并且确定了响应主机(或者是虚拟主机)之后， 重写引擎即开始执行URL到文件名程序段，以处理服务器级的配置中所有的mod_rewrite指令。 在最终数据目录确定以后，进入修正程序段并触发目录级配置中的mod_rewrite指令。 这两个程序段并不是泾渭分明的，但都实施把URL重写成新的URL或者文件名。 虽然API最初不是为此设计的，但它已经成为API的一种用途， 而在Apache 1.x 中这是mod_rewrite唯一的实现方法。 记住以下两点，会有助于更好地理解：
+
+虽然mod_rewrite可以重写URL为URL，重写URL为文件名， 甚至重写文件名为文件名，但是目前API只提供一个URL到文件名的hook。 在Apache 2.0 中，增加了两个丢失hook以使处理过程更清晰。 但是，这样做并没有给用户带来麻烦，只需记住这样一个事实： Apache借助URL到文件名的hook而比API设计的目标功能更强大。 
+难以置信的是，mod_rewrite提供了目录级的URL操作，即，.htaccess文件， 而这些文件必须在URL转换成文件名以后的较多步骤完成之后才会被处理。 这也是必须的，因为.htaccess文件存在于文件系统中，所以处理已经到达这个层面。 换句话说，根据API程序段，这时再处理任何URL操作已经太晚了。 为了解决这个鸡和蛋的问题，mod_rewrite使用了一个技巧： 在进行一个目录级的URL/文件名的操作时，mod_rewrite先把文件名重写回相应的URL (通常这个操作是不可行的，但是参考下面的RewriteBase指令就明白它是怎么实现的)， 然后，对这个新的URL建立一个新的内部的子请求，以此重新开始API程序段的执行。 
+另外，mod_rewrite尽力使这些复杂的操作对用户全透明，但仍须记住： 服务器级的URL操作速度快而且效率高，而目录级的操作由于这个鸡和蛋的问题速度慢效率也低。 但从另一个侧面看，这却是mod_rewrite得以为一般用户提供(局部限制的)URL操作的唯一方法。
+
+牢记这两点!
+
+规则集的处理
+当mod_rewrite在这两个程序段中开始执行时，它会读取配置结构中的配置好的 (或者是在服务启动时建立的服务器级的，或者是Apache核心在遍历目录采集到的目录级的)规则集， 随后，启动URL重写引擎来处理(带有一个或多个条件)的规则集。 无论是服务器级的还是目录级的规则集，都是由同一个URL重写引擎处理，只是处理结果不同而已。
+
+规则集中规则的顺序是很重要的，因为重写引擎是按一种特殊的(非常规的)顺序处理的， 其原则是：逐个遍历每个规则(RewriteRule directives)， 如果出现一个匹配条件的规则，则可能回头遍历已有的规则条件(RewriteConddirectives)。 由于历史的原因，条件规则是置前的，所以控制流程略显冗长，细节见Figure 1。
+
+
+Figure 1:The control flow through the rewriting ruleset 
+
+可见，URL首先与每个规则的Pattern匹配， 如果匹配不成功，mod_rewrite立即终止此规则的处理，继而处理下一个规则。 如果匹配成功，mod_rewrite寻找响应的规则条件，如果一个条件都没有， 则简单地用Substitution构造的新的值来替换URL，然后继续处理其他规则。 如果条件存在，则开始一个内部循环按其列出的顺序逐个处理。 对规则的条件的处理有所不同：URL并不与pattern匹配， 而是，首先通过扩展变量、反向引用、查找映射表等步骤建立一个TestString的字符串， 随后，用它来与CondPattern匹配。如果匹配不成功，则整个条件集和对应的规则失败； 如果匹配成功，则执行下一个规则直到所有条件执行完毕。 如果所有条件得以匹配，则以Substitution替换URL，并且继续处理。
+
+特殊字符的引用
+在Apache 1.3.20, TestString and Substitution 字符串中的特殊字符可以用前缀的斜杠来实现转义(即，忽略其特殊含义而视之为普通字符)。 比如，Substitution可以用'\$'来包含一个美元符号， 以避免mod_rewrite把它视为反向引用。
+
+正则表达式的反向引用能力
+这是很重要的一点：一旦在Pattern或者CondPattern使用了圆括号， 就会建立内部的反向引用，可以使用$N和%N来调用(见下述)， 并且，在Substitution和TestString中都有效。 Figure 2 说明了反向引用被转换扩展的位置。
+
+
+Figure 2: The back-reference flow through a rule. 
+
+虽然mod_rewrite内部处理的这个过程是比较杂乱的， 但是了解这些可以帮助你阅读下文中指令的讲述。
+
+
+环境变量
+此模块会跟踪两个额外的(非标准的)CGI/SSI环境变量， SCRIPT_URL和SCRIPT_URI。 他们包含了当前资源的逻辑的网络状态, 而标准的CGI/SSI变量SCRIPT_NAME和 SCRIPT_FILENAME包含的是物理的系统状态。
+
+注意: 这些变量保持的是其最初被请求时的URI/URL, 即, 在任何重写操作之前的。 其重要性在于他们是重写操作重写URL到物理路径名的原始依据。
+
+举例
+SCRIPT_NAME=/sw/lib/w3s/tree/global/u/rse/.www/index.html
+SCRIPT_FILENAME=/u/rse/.www/index.html
+SCRIPT_URL=/u/rse/
+SCRIPT_URI=http://en1.engelschall.com/u/rse/
+
+
+实用方案
+我们还提供另外一个文档URL Rewriting Guide， 列举了许多基于URL的问题的实用方案，其中你可以找到真实有用的规则集和mod_rewrite的更多信息。
+
+
+RewriteBase 指令
+说明: 设置目录级重写的基准URL 
+语法: RewriteBase URL-path 
+默认值: 参见使用方法. 
+上下文: 目录, .htaccess 
+覆盖项: FileInfo 
+状态: Extension 
+模块: mod_rewrite 
+
+RewriteBase指令显式地设置了目录级重写的基准URL。 在下文中，你可以看见RewriteRule可以用于目录级的配置文件中(.htaccess)， 并在局部范围内起作用，即，规则实际处理的只是剥离了本地路径前缀的一部分。 处理结束后，这个路径会被自动地附着回去。 默认值是，RewriteBase physical-directory-path
+
+在对一个新的URL进行替换时，此模块必须把这个URL重新注入到服务器处理中。 为此，它必须知道其对应的URL前缀或者说URL基准。通常，此前缀就是对应的文件路径。 但是，大多数网站URL不是直接对应于其物理文件路径的，因而一般不能做这样的假定! 所以在这种情况下，就必须用RewriteBase指令来指定正确的URL前缀。
+
+如果你的网站服务器URL不是与物理文件路径直接对应的，而又需要使用RewriteRule指令，则必须在每个对应的.htaccess文件中指定RewriteBase。 
+举例，目录级配置文件内容如下:
+
+#
+#  /abc/def/.htaccess -- per-dir config file for directory /abc/def
+#  Remember: /abc/def is the physical path of /xyz, i.e., the server
+#            has a 'Alias /xyz /abc/def' directive e.g.
+#
+
+RewriteEngine On
+
+#  let the server know that we were reached via /xyz and not
+#  via the physical path prefix /abc/def
+RewriteBase   /xyz
+
+#  now the rewriting rules
+RewriteRule   ^oldstuff\.html$  newstuff.html
+
+上述例子中，对/xyz/oldstuff.html 的请求被正确地重写为物理的文件/abc/def/newstuff.html.
+
+For Apache Hackers
+以下列出了内部处理的详细步骤:
+
+Request:
+  /xyz/oldstuff.html
+
+Internal Processing:
+  /xyz/oldstuff.html     -> /abc/def/oldstuff.html  (per-server Alias)
+  /abc/def/oldstuff.html -> /abc/def/newstuff.html  (per-dir    RewriteRule)
+  /abc/def/newstuff.html -> /xyz/newstuff.html      (per-dir    RewriteBase)
+  /xyz/newstuff.html     -> /abc/def/newstuff.html  (per-server Alias)
+
+Result:
+  /abc/def/newstuff.html
+
+虽然这个过程看来很繁复，但是由于目录级重写的到来时机已经太晚了， 它不得不把这个(重写)请求重新注入到Apache核心中，所以Apache内部确实是这样处理的。 但是：它的开销并不象看起来的那样大，因为重新注入完全在Apache服务器内部进行， 而且这样的过程在Apache内部也为其他许多操作所使用。 所以，你可以充分信任其设计和实现是正确的。
+
+
+RewriteCond 指令
+说明: 定义重写发生的条件  
+语法: RewriteCond TestString CondPattern 
+上下文: 服务器配置, 虚拟主机, 目录, .htaccess 
+覆盖项: FileInfo 
+状态: Extension 
+模块: mod_rewrite 
+
+RewriteCond指令定义了一个规则的条件，即，在一个RewriteRule指令之前有一个或多个RewriteCond指令。 条件之后的重写规则仅在当前URI与pattern匹配并且符合这些条件的时候才会起作用。
+
+TestString是一个纯文本的字符串，但是还可以包含下列可扩展的成分：
+
+RewriteRule反向引用: 引用方法是 
+$N 
+
+(0 <= N <= 9) 引用当前(带有若干RewriteCond指令的)RewriteRule中的 与pattern匹配的分组成分(圆括号!)。 
+RewriteCond反向引用: 引用方法是 
+%N 
+
+(1 <= N <= 9) 引用当前若干RewriteCond条件中最后符合的条件中的分组成分(圆括号!)。 
+RewriteMap 扩展: 引用方法是 
+${mapname:key|default} 
+
+细节请参见the documentation for RewriteMap。 
+服务器变量: 引用方法是 
+%{ NAME_OF_VARIABLE } 
+
+NAME_OF_VARIABLE可以是下表列出的字符串之一: HTTP headers: connection & request:  
+HTTP_USER_AGENT
+HTTP_REFERER
+HTTP_COOKIE
+HTTP_FORWARDED
+HTTP_HOST
+HTTP_PROXY_CONNECTION
+HTTP_ACCEPT
+ REMOTE_ADDR
+REMOTE_HOST
+REMOTE_USER
+REMOTE_IDENT
+REQUEST_METHOD
+SCRIPT_FILENAME
+PATH_INFO
+QUERY_STRING
+AUTH_TYPE
+  
+server internals: system stuff: specials: 
+DOCUMENT_ROOT
+SERVER_ADMIN
+SERVER_NAME
+SERVER_ADDR
+SERVER_PORT
+SERVER_PROTOCOL
+SERVER_SOFTWARE
+ TIME_YEAR
+TIME_MON
+TIME_DAY
+TIME_HOUR
+TIME_MIN
+TIME_SEC
+TIME_WDAY
+TIME
+ API_VERSION
+THE_REQUEST
+REQUEST_URI
+REQUEST_FILENAME
+IS_SUBREQ
+ 
+
+这些都对应于类似命名的HTTP MIME头、Apache服务器的C变量以及Unix系统中的 struct tm字段，大多数都在其他的手册或者CGI规范中有所讲述。 而其中为mod_rewrite所特有的变量有:
+
+IS_SUBREQ 
+如果正在处理的请求是一个子请求，它包含字符串"true"，否则就是"false"。 模块为了解析URI中的附加文件，有可能会产生子请求。 
+API_VERSION 
+这是正在使用的httpd中(服务器和模块之间内部接口)的Apache模块API的版本， 其定义位于include/ap_mmn.h中。此模块版本对应于正在使用的Apache的版本 (比如，在Apache 1.3.14的发行版中，这个值是19990320:10)。 通常，对它感兴趣的是模块的作者。 
+THE_REQUEST 
+这是由浏览器发送给服务器的完整的HTTP请求行。(比如, "GET /index.html HTTP/1.1"). 它不包含任何浏览器发送的附加头信息。 
+REQUEST_URI 
+这是在HTTP请求行中所请求的资源。(比如上述例子中的"/index.html".) 
+REQUEST_FILENAME 
+这是与请求相匹配的完整的本地文件系统的文件路径名或描述. 
+特别注意事项:
+
+SCRIPT_FILENAME和REQUEST_FILENAME包含的值是相同的，即, Apache服务器的内部request_rec结构中的filename字段。 第一个其实就是大家都知道的CGI变量名，而第二个则是( 包含了request_rec结构中的uri字段的)REQUEST_URI的一个副本， 
+特殊形式: %{ENV:variable} 其中的variable可以是任何环境变量。 它是通过查找Apache内部结构得到的， 或者(如果没找到的话)是由Apache服务器进程通过getenv()得到的。 
+特殊形式: %{HTTP:header} 其中的header可以是任何HTTP MIME头的名称。 它是通过查找HTTP请求得到的。比如: %{HTTP:Proxy-Connection}就是HTTP头 ``Proxy-Connection:''的值. 
+特殊形式 %{LA-U:variable} 它是一个预设的值， variable的最终值在执行一个内部的(基于URL的)子请求后决定。 在重写需要使用一个尚未有效的但是会在之后的API程序段中设置的变量的时候，就会使用这个方法。 比如，需要在服务器级配置(httpd.conf文件)中重写REMOTE_USER变量， 则，必须使用%{LA-U:REMOTE_USER}，因为此变量是由认证程序段设置的， 而这个程序段是在mod_rewrite所在的URL转译程序段之后才执行的。 但是，因为mod_rewrite是通过API修正程序段来实现目录级(.htaccess file)配置的， 而这个程序段在认证程序段之前就执行了，所以用%{REMOTE_USER}就可以了。 
+特殊形式: %{LA-F:variable} 它是一个预设的值， variable的最终值在执行一个内部的(基于文件名的)子请求后决定。 大多数情况下和上述的LA-U是相同的. 
+CondPattern是条件pattern, 即, 一个应用于当前实例TestString的正则表达式, 即, TestString将会被计算然后与CondPattern匹配.
+
+谨记: CondPattern是一个兼容perl的正则表达式， 但是还有若干增补：
+
+可以在pattern串中使用'!' 字符(惊叹号)来实现匹配的反转。 
+CondPatterns有若干特殊的变种。除了正则表达式的标准用法，还有下列用法： 
+'<CondPattern' (词典顺序的小于)
+将CondPattern视为纯字符串，与TestString以词典顺序相比较. 如果按词典顺序，TestString小于CondPattern，则为真. 
+'>CondPattern' (词典顺序的大于)
+将CondPattern视为纯字符串，与TestString以词典顺序相比较. 如果按词典顺序，TestString大于CondPattern，则为真. 
+'=CondPattern' (词典顺序的等于)
+将CondPattern视为纯字符串，与TestString以词典顺序相比较. 如果按词典顺序，TestString等于CondPattern，则为真，即， 两个字符串(逐个字符地)完全相等。如果CondPattern只是""(两个引号)， 则TestString将与空串相比较. 
+'-d' (是一个目录[directory])
+将TestString视为一个路径名并测试它是否存在而且是一个目录. 
+'-f' (是一个常规的文件[file])
+将TestString视为一个路径名并测试它是否存在而且是一个常规的文件. 
+'-s' (是一个非空的常规文件[size])
+将TestString视为一个路径名并测试它是否存在而且是一个尺寸大于0的常规的文件. 
+'-l' (是一个符号连接[link])
+将TestString视为一个路径名并测试它是否存在而且是一个符号连接. 
+'-F' (对子请求有效的业已存在的文件)
+测试TestString是否一个有效的文件， 而且可以被服务器当前已经配置的所有存取控制所存取。 它用一个内部子请求来做判断，由于会降低服务器的性能，请小心使用! 
+'-U' (对子请求有效的业已存在的URL)
+测试TestString是否一个有效的URL， 而且可以被服务器当前已经配置的所有存取控制所存取。 它用一个内部子请求来做判断，由于会降低服务器的性能，请小心使用! 
+注意
+所有这些测试都可以用惊叹号作前缀('!')以实现条件的反转. 
+另外，还可以为CondPattern追加特殊的标记
+
+[flags] 
+
+作为RewriteCond指令的第三个参数。 Flags是一个以逗号分隔的以下标记的列表：
+
+'nocase|NC' (no case)
+它使测试忽略大小写, 即, 扩展后的TestString和CondPattern中， 'A-Z' 和'a-z'是没有区别的。此标记仅作用于TestString和CondPattern的比较， 而对文件系统和子请求的测试不起作用。 
+'ornext|OR' (or next condition)
+它以OR方式组合若干规则的条件，而不是隐含的AND。典型的例子如下： 
+RewriteCond %{REMOTE_HOST}  ^host1.*  [OR]
+RewriteCond %{REMOTE_HOST}  ^host2.*  [OR]
+RewriteCond %{REMOTE_HOST}  ^host3.*
+RewriteRule ...some special stuff for any of these hosts...
+
+如果不用这个标记，则必须使用三个 条件/规则。 
+举例:
+
+如果要按请求头中的``User-Agent:'重写一个站点的主页，可以这样写：
+
+RewriteCond  %{HTTP_USER_AGENT}  ^Mozilla.*
+RewriteRule  ^/$                 /homepage.max.html  [L]
+
+RewriteCond  %{HTTP_USER_AGENT}  ^Lynx.*
+RewriteRule  ^/$                 /homepage.min.html  [L]
+
+RewriteRule  ^/$                 /homepage.std.html  [L]
+
+含义: 如果你使用的浏览器是Netscape Navigator(其识别标志是'Mozilla'), 则你将得到内容最大化的主页，包括Frames等等； 如果你使用的是(基于终端的)Lynx，则你得到的是内容最小化的主页，不包含tables等等； 如果你使用的是其他的浏览器，则你得到的是一个标准的主页。
+
+
+RewriteEngine 指令
+说明: 打开或关闭运行时刻的重写引擎 
+语法: RewriteEngine on|off 
+默认值: RewriteEngine off 
+上下文: 服务器配置, 虚拟主机, 目录, .htaccess 
+覆盖项: FileInfo 
+状态: Extension 
+模块: mod_rewrite 
+
+RewriteEngine指令打开或关闭运行时刻的重写引擎。 如果设置为off，则此模块不执行任何运行时刻的重写操作， 甚至也不更新SCRIPT_URx环境变量。
+
+使用该指令可以使此模块无效，而无须注释所有的RewriteRule指令!
+
+注意：默认情况下，重写配置是不可继承的， 即，必须在每个需要的虚拟主机中设置一个RewriteEngine on指令。
+
+
+RewriteLock 指令
+说明: 设置RewriteMap同步所使用的加锁文件名 
+语法: RewriteLock file-path 
+上下文: 服务器配置 
+状态: Extension 
+模块: mod_rewrite 
+
+此指令设置mod_rewrite为了和RewriteMap 程序通讯而使用的一个同步加锁文件的名称。 在需要使用重写映射表程序时，它必须是一个本地路径(而不能是一个NFS挂接设备)； 对其他类型的重写映射表，则无此要求。
+
+
+RewriteLog 指令
+说明: 设置重写引擎日志的文件名 
+语法: RewriteLog file-path 
+上下文: 服务器配置, 虚拟主机 
+状态: Extension 
+模块: mod_rewrite 
+
+RewriteLog指令设置用于记录所有重写操作的文件的名称。 如果此文件名不是以斜杠('/')开头，则它是相对于Server Root的。 此指令应该仅仅出现在服务器级配置中。
+
+如果要关闭对重写操作的记录，不推荐把Filename设置为/dev/null， 因为，虽然重写引擎不能输出记录了，但仍会内部地建立这个日志文件， 它会使服务器速度降低，而且对管理员毫无益处! 要关闭日志，可以删除或注解RewriteLog指令， 或者使用RewriteLogLevel 0! 
+安全
+参见Apache Security Tips，其中讲述了，为什么如果存放日志的目录对除了启动服务器以外的用户是可写的会带来安全隐患。 
+举例
+RewriteLog "/usr/local/var/apache/logs/rewrite.log" 
+
+
+RewriteLogLevel 指令
+说明: 设置重写引擎日志的详细程度的级别 
+语法: RewriteLogLevel Level 
+默认值: RewriteLogLevel 0 
+上下文: 服务器配置, 虚拟主机 
+状态: Extension 
+模块: mod_rewrite 
+
+RewriteLogLevel指令设置重写引擎日志的详细程度的级别。 默认级别0意味着不记录，而9或更大的值意味着记录所有的操作。
+
+要关闭重写引擎日志，可以简单地设此值为0，关闭所有的重写操作记录。
+
+使用较高的Level值会使Apache服务器速度急剧下降! 重写日志使用大于2的Level值只用于调试! 
+举例
+RewriteLogLevel 3 
+
+
+RewriteMap 指令
+说明: 定义用于关键词查找的映射函数 
+语法: RewriteMap MapName MapType:MapSource  
+上下文: 服务器配置, 虚拟主机 
+状态: Extension 
+模块: mod_rewrite 
+兼容性: Apache 2.0.41及其更新版本中可以使用不同的dbm类型。 
+
+RewriteMap定义一个映射表， 由映射函数用于查找关键词来插入/替换字段。此查找操作的源可以是多种类型。
+
+MapName是映射表的名称， 指定了一个映射函数，用于重写规则的字符串替换，它可以是下列形式之一：
+
+${ MapName : LookupKey }
+${ MapName : LookupKey | DefaultValue } 
+
+如果使用了这样的形式，则会在MapName中查找关键词LookupKey。 如果找到了，则被替换成SubstValue； 如果没有找到，则被替换成DefaultValue， 如果没有指定DefaultValue，则被替换成空字符串。
+
+可以使用下列MapType和MapSource的组合:
+
+标准纯文本
+MapType: txt, MapSource: 有效的Unix文件系统文件名 
+这是重写映射表的标准形式，即， MapSource是一个纯文本文件，包含空行、注释行(以字符'#'打头)， 以及每行一个的替换对，如下。
+
+MatchingKey SubstValue 
+
+Example
+##
+##  map.txt -- rewriting map
+##
+
+Ralf.S.Engelschall    rse   # Bastard Operator From Hell
+Mr.Joe.Average        joe   # Mr. Average
+
+RewriteMap real-to-user txt:/path/to/file/map.txt 
+
+随机纯文本
+MapType: rnd, MapSource: 有效的Unix文件系统文件名 
+这个与上述的标准纯文本很相似，但它有一个特殊的后处理特性： 查找完毕后，会解析其中包含的含义为``or''和``|''符号。 也就是说，会随机地选择其中之一作为实际的返回值。 虽然这看似毫无意义，但它的设计意图是， 在一个查找值是服务器名称的反向代理环境中，实现负载平衡。如：
+
+##
+##  map.txt -- rewriting map
+##
+
+static   www1|www2|www3|www4
+dynamic  www5|www6
+
+RewriteMap servers rnd:/path/to/file/map.txt 
+
+散列文件
+MapType: dbm[=type], MapSource: 有效的Unix文件系统文件名 
+这里的源是一个二进制格式的DBM文件，包含了与纯文本相同的内容， 但是因为它有优化的特殊表现形式，使它的查找速度明显快得多。 此类型可以是sdbm, gdbm, ndbm或db，由compile-time settings所决定。如果省略type，则使用编译时选择的缺省设置。 你可以使用任何DBM工具或者下列Perl脚本来建立这个文件，但必须保证DBM的类型正确。 建立NDBM文件的例子：
+
+#!/path/to/bin/perl
+##
+##  txt2dbm -- convert txt map to dbm format
+##
+
+use NDBM_File;
+use Fcntl;
+
+($txtmap, $dbmmap) = @ARGV;
+
+open(TXT, "<$txtmap") or die "Couldn't open $txtmap!\n";
+tie (%DB, 'NDBM_File', $dbmmap,O_RDWR|O_TRUNC|O_CREAT, 0644)
+  or die "Couldn't create $dbmmap!\n";
+
+while (<TXT>) {
+  next if (/^\s*#/ or /^\s*$/);
+  $DB{$1} = $2 if (/^\s*(\S+)\s+(\S+)/);
+}
+
+untie %DB;
+close(TXT);
+
+$ txt2dbm map.txt map.db 
+
+内部函数
+MapType: int, MapSource: 内部的Apache函数 
+这里的源是一个内部的Apache函数。 目前，还不能由你自己建立，只能使用下列已经存在的函数：
+
+toupper:
+转换查找关键词为大写. 
+tolower:
+转换查找关键词为小写. 
+escape:
+转换查找关键词中的特殊字符为十六进制编码. 
+unescape:
+转换查找关键词中的十六进制编码为特殊字符. 
+外部的重写程序
+MapType: prg, MapSource: 有效的Unix文件系统文件名 
+这里的源是一个程序，而不是一个映射表文件。 程序的编制语言可以随意选择，但最终结果必须是可执行的 (即, 或者是目标代码，或者是首行为'#!/path/to/interpreter'的脚本).
+
+此程序仅在Apache服务器启动时启动一次， 随后通过stdin和stdout文件句柄与重写引擎交互。 对每个映射函数的查找操作，它从stdin接收以回车结束的查找关键词， 然后把查找结果以回车结束反馈到stdout， 如果查找失败，则返回四个字符的``NULL'' (即, 对给定的关键词没有对应的值)。 此程序的最简单形式是一个1:1的映射(即,key == value)，如:
+
+#!/usr/bin/perl
+$| = 1;
+while (<STDIN>) {
+    # ...put here any transformations or lookups...
+    print $_;
+}
+
+但是必须注意:
+
+``即使它看来简单而愚蠢，只要正确，就保持原样(Keep it simple, stupid)'' (KISS), 因为，在规则起作用时，此程序的崩溃会直接导致Apache服务器的崩溃。 
+避免犯一个常见的错误: 绝不要对stdout做缓冲I/O! 它会导致死循环! 所以上述例子中才会有``$|=1''... 
+使用RewriteLock指令定义一个加锁文件， 用于同步mod_rewrite和此程序之间的通讯。缺省时是没有同步操作的。 
+RewriteMap指令允许多次出现。 对每个映射函数都可以使用一个RewriteMap指令来定义其重写映射表。 虽然不能在目录的上下文中定义映射表， 但是，完全可以在其中使用映射表。
+
+注意
+对于纯文本和DBM格式的文件，已经查找过的关键词会被缓存在内核中，直到映射表的mtime改变了或者服务器重启了。这样，你可以把每个请求都会用到的映射函数放在规则中，这是没有问题的，因为外部查找只进行一次! 
+
+RewriteOptions 指令
+说明: 为重写引擎设置一些特殊的选项 
+语法: RewriteOptions Options 
+默认值: RewriteOptions MaxRedirects=10 
+上下文: 服务器配置, 虚拟主机, 目录, .htaccess 
+覆盖项: FileInfo 
+状态: Extension 
+模块: mod_rewrite 
+兼容性: MaxRedirects在Apache 2.0.45以及更新的版本中有效 
+
+RewriteOptions指令为当前服务器级和目录级的配置设置一些选项。 Option可以是下列值之一：
+
+inherit 
+此值强制当前配置可以继承其父配置。 在虚拟主机级配置中，它意味着主服务器的映射表、条件和规则可以被继承。 在目录级配置中，它意味着其父目录的.htaccess中的条件和规则可以被继承。 
+MaxRedirects=number 
+为了避免目录级RewriteRule的无休止的内部重定向， 在此类重定向和500内部服务器错误次数达到一个最大值的时候， mod_rewrite会停止对此请求的处理。 如果你确实需要对每个请求允许大于10次的内部重定向，可以增大这个值。 
+
+RewriteRule 指令
+说明: 为重写引擎定义规则 
+语法: RewriteRule Pattern Substitution 
+上下文: 服务器配置, 虚拟主机, 目录, .htaccess 
+覆盖项: FileInfo 
+状态: Extension 
+模块: mod_rewrite 
+兼容性: cookie-flag在Apache 2.0.40及其更新版本中有效. 
+
+RewriteRule指令是重写引擎的根本。此指令可以多次使用。 每个指令定义一个简单的重写规则。这些规则的定义顺序尤为重要, 因为，在运行时刻，规则是按这个顺序逐一生效的.
+
+Pattern是一个作用于当前URL的兼容perl的正则表达式. 这里的``当前''是指该规则生效时的URL的值。 它可能与被请求的URL不同，因为其他规则可能在此之前已经发生匹配并对它做了改动。
+
+正则表达式的一些用法:
+
+Text:
+  .           Any single character
+  [chars]     Character class: One  of chars
+  [^chars]    Character class: None of chars
+  text1|text2 Alternative: text1 or text2
+
+Quantifiers:
+  ?           0 or 1 of the preceding text
+  *           0 or N of the preceding text (N > 0)
+  +           1 or N of the preceding text (N > 1)
+
+Grouping:
+  (text)      Grouping of text
+              (either to set the borders of an alternative or
+              for making backreferences where the Nth group can 
+              be used on the RHS of a RewriteRule with $N)
+
+Anchors:
+  ^           Start of line anchor
+  $           End   of line anchor
+
+Escaping:
+  \char       escape that particular char
+              (for instance to specify the chars ".[]()" etc.)
+
+更多有关正则表达式的资料请参见perl正则表达式手册页("perldoc perlre"). 如果你对正则表达式的更详细的资料及其变种(POSIX regex 等.)感兴趣， 请参见以下专著:
+
+Mastering Regular Expressions
+Jeffrey E.F. Friedl
+Nutshell Handbook Series
+O'Reilly & Associates, Inc. 1997
+ISBN 1-56592-257-3
+
+
+另外，在mod_rewrite中，还可以使用否字符('!')的pattern前缀，以实现pattern的反转。 比如：``如果当前URL不与pattern相匹配''. 它用于使用否pattern较容易描述的需要排除的某些情况，或者作为最后一条规则。
+
+注意
+使用否字符以反转pattern时，pattern中不能使用分组的通配成分。 由于pattern不匹配而使分组的内容是空的，所以它是不可能实现的。 因此，如果使用了否pattern，那么后继的字符串中就不能使用$N! 
+重写规则中的Substitution是， 当原始URL与Pattern相匹配时，用以替代(或替换)的字符串。 除了纯文本，还可以使用
+
+$N 反向引用RewriteRule的pattern 
+%N 反向引用最后匹配的RewriteCond pattern 
+规则条件测试字符串中(%{VARNAME})的服务器变量 
+映射函数调用(${mapname:key|default}) 
+反向引用的$N (N=0..9) 是指用Pattern所匹配的第N组的内容去替换URL。 服务器变量与RewriteCond指令的TestString相同。 映射函数由RewriteMap指令所决定，其说明也参见该指令。 这三种类型变量按上面列表中的顺序被扩展。
+
+如上所述，所有的重写规则都是(按配置文件中的定义顺序)作用于Substitution的。 URL被Substitution完全地替换，并继续处理直到所有规则处理完毕， 除非用L标记显式地终结 - 见下文。
+
+'-'是一个特殊的替换串，意思是不要替换! 似乎很愚蠢吧? 不, 它可以用于仅仅匹配某些URL而无须替换的情况下，即， 在发生替换前，允许以C (chain)标记连接的多个pattern同时起作用。
+
+还有，你甚至可以在替换字符串中新建包含请求串的URL。 在替换串中使用问号，以标明其后继的成分应该被重新注入到QUERY_STRING中。 要删除一个已有的请求串，可以用问号来终结替换字符串。
+
+注意
+一个特殊功能: 在用http://thishost[:thisport]作为替换字段的前缀时， mod_rewrite会把它自动剥离出去。 在配合生成主机名的映射函数使用的时候， 这个对隐含的外部重定向URL的精简化操作是有用的而且是重要的。 下面例子一节中的第一个例子有助于理解这点。 
+谨记
+由于此功能的存在，以http://thishost为前缀的无条件外部重定向在你自己的服务器上是无效的。要做这样一个自身的重定向，必须使用R标记 (见下文). 
+此外，Substitution还可以追加特殊标记
+
+[flags] 
+
+作为RewriteRule指令的第三个参数。 Flags是一个包含以逗号分隔的下列标记的列表: 
+
+'redirect|R [=code]' (强制重定向 redirect)
+以http://thishost[:thisport]/(使新的URL成为一个URI) 为前缀的Substitution可以强制性执行一个外部重定向。 如果code没有指定，则产生一个HTTP响应代码302(临时性移动)。 如果需要使用在300-400范围内的其他响应代码，只需在此指定这个数值即可， 另外，还可以使用下列符号名称之一: temp (默认的), permanent, seeother. 用它可以把规范化的URL反馈给客户端，如, 重写``/~''为 ``/u/''，或对/u/user加上斜杠，等等。
+
+注意: 在使用这个标记时，必须确保该替换字段是一个有效的URL! 否则，它会指向一个无效的位置! 并且要记住，此标记本身只是对URL加上 http://thishost[:thisport]/的前缀，重写操作仍然会继续。 通常，你会希望停止重写操作而立即重定向，则还需要使用'L'标记.
+
+'forbidden|F' (强制URL为被禁止的 forbidden)
+强制当前URL为被禁止的，即，立即反馈一个HTTP响应代码403(被禁止的)。 使用这个标记，可以链接若干RewriteConds以有条件地阻塞某些URL。 
+'gone|G' (强制URL为已废弃的 gone)
+强制当前URL为已废弃的，即，立即反馈一个HTTP响应代码410(已废弃的)。 使用这个标记，可以标明页面已经被废弃而不存在了. 
+'proxy|P' (强制为代理 proxy)
+此标记使替换成分被内部地强制为代理请求，并立即(即， 重写规则处理立即中断)把处理移交给代理模块。 你必须确保此替换串是一个有效的(比如常见的以 http://hostname开头的)能够为Apache代理模块所处理的URI。 使用这个标记，可以把某些远程成分映射到本地服务器名称空间， 从而增强了ProxyPass指令的功能。 
+注意: 要使用这个功能，代理模块必须编译在Apache服务器中。 如果你不能确定，可以检查``httpd -l''的输出中是否有mod_proxy.c。 如果有，则mod_rewrite可以使用这个功能； 如果没有，则必须启用mod_proxy并重新编译``httpd''程序。
+
+'last|L' (最后一个规则 last)
+立即停止重写操作，并不再应用其他重写规则。 它对应于Perl中的last命令或C语言中的break命令。 这个标记可以阻止当前已被重写的URL为其后继的规则所重写。 举例，使用它可以重写根路径的URL('/')为实际存在的URL, 比如, '/e/www/'. 
+'next|N' (重新执行 next round)
+重新执行重写操作(从第一个规则重新开始). 这时再次进行处理的URL已经不是原始的URL了，而是经最后一个重写规则处理的URL。 它对应于Perl中的next命令或C语言中的continue命令。 此标记可以重新开始重写操作，即, 立即回到循环的头部。
+但是要小心，不要制造死循环! 
+'chain|C' (与下一个规则相链接 chained)
+此标记使当前规则与下一个(其本身又可以与其后继规则相链接的， 并可以如此反复的)规则相链接。 它产生这样一个效果: 如果一个规则被匹配，通常会继续处理其后继规则， 即，这个标记不起作用；如果规则不能被匹配， 则其后继的链接的规则会被忽略。比如，在执行一个外部重定向时， 对一个目录级规则集，你可能需要删除``.www'' (此处不应该出现``.www''的)。 
+'type|T=MIME-type' (强制MIME类型 type)
+强制目标文件的MIME类型为MIME-type。 比如，它可以用于模拟mod_alias中的ScriptAlias指令， 以内部地强制被映射目录中的所有文件的MIME类型为``application/x-httpd-cgi''. 
+'nosubreq|NS' (仅用于不对内部子请求进行处理 no internal sub-request)
+在当前请求是一个内部子请求时，此标记强制重写引擎跳过该重写规则。 比如，在mod_include试图搜索可能的目录默认文件(index.xxx)时， Apache会内部地产生子请求。对子请求，它不一定有用的，而且如果整个规则集都起作用， 它甚至可能会引发错误。所以，可以用这个标记来排除某些规则。
+
+根据你的需要遵循以下原则: 如果你使用了有CGI脚本的URL前缀，以强制它们由CGI脚本处理， 而对子请求处理的出错率(或者开销)很高，在这种情况下，可以使用这个标记。
+
+'nocase|NC' (忽略大小写 no case)
+它使Pattern忽略大小写，即, 在Pattern与当前URL匹配时，'A-Z' 和'a-z'没有区别。 
+'qsappend|QSA' (追加请求串 query string append)
+此标记强制重写引擎在已有的替换串中追加一个请求串，而不是简单的替换。 如果需要通过重写规则在请求串中增加信息，就可以使用这个标记。 
+'noescape|NE' (在输出中不对URI作转义 no URI escaping)
+此标记阻止mod_rewrite对重写结果应用常规的URI转义规则。 一般情况下，特殊字符(如'%', '$', ';'等)会被转义为等值的十六进制编码。 此标记可以阻止这样的转义，以允许百分号等符号出现在输出中，如： 
+RewriteRule /foo/(.*) /bar?arg=P1\%3d$1 [R,NE] 
+
+可以使'/foo/zed'转向到一个安全的请求'/bar?arg=P1=zed'. 
+'passthrough|PT' (移交给下一个处理器 pass through)
+此标记强制重写引擎将内部结构request_rec中的uri字段设置为 filename字段的值，它只是一个小修改，使之能对来自其他URI到文件名翻译器的 Alias，ScriptAlias, Redirect 等指令的输出进行后续处理。举一个能说明其含义的例子： 如果要通过mod_rewrite的重写引擎重写/abc为/def， 然后通过mod_alias使/def转变为/ghi，可以这样: 
+RewriteRule ^/abc(.*) /def$1 [PT]
+Alias /def /ghi 
+
+如果省略了PT标记，虽然mod_rewrite运作正常， 即, 作为一个使用API的URI到文件名翻译器， 它可以重写uri=/abc/...为filename=/def/...， 但是，后续的mod_alias在试图作URI到文件名的翻译时，则会失效。 
+注意: 如果需要混合使用不同的包含URI到文件名翻译器的模块时， 就必须使用这个标记。。 混合使用mod_alias和mod_rewrite就是个典型的例子。
+
+For Apache hackers
+如果当前Apache API除了URI到文件名hook之外，还有一个文件名到文件名的hook， 就不需要这个标记了! 但是，如果没有这样一个hook，则此标记是唯一的解决方案。 Apache Group讨论过这个问题，并在Apache 2.0 版本中会增加这样一个hook。 
+'skip|S=num' (跳过后继的规则 skip)
+此标记强制重写引擎跳过当前匹配规则后继的num个规则。 它可以实现一个伪if-then-else的构造: 最后一个规则是then从句，而被跳过的skip=N个规则是else从句. (它和'chain|C'标记是不同的!) 
+'env|E=VAR:VAL' (设置环境变量 environment variable)
+此标记使环境变量VAR的值为VAL, VAL可以包含可扩展的反向引用的正则表达式$N和%N。 此标记可以多次使用以设置多个变量。 这些变量可以在其后许多情况下被间接引用，但通常是在XSSI (via <!--#echo var="VAR"-->) or CGI (如 $ENV{'VAR'})中， 也可以在后继的RewriteCond指令的pattern中通过%{ENV:VAR}作引用。 使用它可以从URL中剥离并记住一些信息。 
+'cookie|CO=NAME:VAL:domain[:lifetime[:path]]' (设置cookie)
+它在客户端浏览器上设置一个cookie。 cookie的名称是NAME，其值是VAL。 domain字段是该cookie的域，比如'.apache.org', 可选的lifetime是cookie生命期的分钟数， 可选的path是cookie的路径。 
+注意
+绝不要忘记，在服务器级配置文件中，Pattern是作用于整个URL的。 但是在目录级配置文件中， (一般总是和特定目录名称相同的)目录前缀会在pattern匹配时被自动删除，而又在替换完毕后自动被加上。此特性对很多种重写是必须的，因为，如果没有这个剥离前缀的动作，就必须与其父目录去匹配，而这并不总是可行的。 
+但是有一个例外: 如果替换串以``http://''开头， 则不会附加目录前缀， 而是强制产生一个外部重定向，或者(如果使用了P标记)是一个代理操作!
+
+注意
+为了对目录级配置启用重写引擎，你必须在这些文件中设置``RewriteEngine On''， 并且打开``Options FollowSymLinks'。 如果管理员对用户目录禁用了FollowSymLinks， 则无法使用重写引擎。这个限制是为了安全而设置的。 
+以下是所有可能的替换组合及其含义:
+
+在服务器级配置中(httpd.conf)
+，对这样一个请求 ``GET /somepath/pathinfo'':
+
+
+Given Rule                                      Resulting Substitution
+----------------------------------------------  ----------------------------------
+^/somepath(.*) otherpath$1                      not supported, because invalid!
+
+^/somepath(.*) otherpath$1  [R]                 not supported, because invalid!
+
+^/somepath(.*) otherpath$1  [P]                 not supported, because invalid!
+----------------------------------------------  ----------------------------------
+^/somepath(.*) /otherpath$1                     /otherpath/pathinfo
+
+^/somepath(.*) /otherpath$1 [R]                 http://thishost/otherpath/pathinfo
+                                                via external redirection
+
+^/somepath(.*) /otherpath$1 [P]                 not supported, because silly!
+----------------------------------------------  ----------------------------------
+^/somepath(.*) http://thishost/otherpath$1      /otherpath/pathinfo
+
+^/somepath(.*) http://thishost/otherpath$1 [R]  http://thishost/otherpath/pathinfo
+                                                via external redirection
+
+^/somepath(.*) http://thishost/otherpath$1 [P]  not supported, because silly!
+----------------------------------------------  ----------------------------------
+^/somepath(.*) http://otherhost/otherpath$1     http://otherhost/otherpath/pathinfo
+                                                via external redirection
+
+^/somepath(.*) http://otherhost/otherpath$1 [R] http://otherhost/otherpath/pathinfo
+                                                via external redirection
+                                                (the [R] flag is redundant)
+
+^/somepath(.*) http://otherhost/otherpath$1 [P] http://otherhost/otherpath/pathinfo
+                                                via internal proxy
+
+在/somepath的目录级配置中
+(即, 目录/physical/path/to/somepath的.htaccess文件中包含 RewriteBase /somepath)
+对这样一个请求``GET /somepath/localpath/pathinfo'':
+
+
+Given Rule                                      Resulting Substitution
+----------------------------------------------  ----------------------------------
+^localpath(.*) otherpath$1                      /somepath/otherpath/pathinfo
+
+^localpath(.*) otherpath$1  [R]                 http://thishost/somepath/otherpath/pathinfo
+                                                via external redirection
+
+^localpath(.*) otherpath$1  [P]                 not supported, because silly!
+----------------------------------------------  ----------------------------------
+^localpath(.*) /otherpath$1                     /otherpath/pathinfo
+
+^localpath(.*) /otherpath$1 [R]                 http://thishost/otherpath/pathinfo
+                                                via external redirection
+
+^localpath(.*) /otherpath$1 [P]                 not supported, because silly!
+----------------------------------------------  ----------------------------------
+^localpath(.*) http://thishost/otherpath$1      /otherpath/pathinfo
+
+^localpath(.*) http://thishost/otherpath$1 [R]  http://thishost/otherpath/pathinfo
+                                                via external redirection
+
+^localpath(.*) http://thishost/otherpath$1 [P]  not supported, because silly!
+----------------------------------------------  ----------------------------------
+^localpath(.*) http://otherhost/otherpath$1     http://otherhost/otherpath/pathinfo
+                                                via external redirection
+
+^localpath(.*) http://otherhost/otherpath$1 [R] http://otherhost/otherpath/pathinfo
+                                                via external redirection
+                                                (the [R] flag is redundant)
+
+^localpath(.*) http://otherhost/otherpath$1 [P] http://otherhost/otherpath/pathinfo
+                                                via internal proxy
+
+举例:
+
+要重写这种形式的URL
+
+/ Language /~ Realname /.../ File 
+
+为
+
+/u/ Username /.../ File . Language 
+
+可以把这样的对应关系保存在/path/to/file/map.txt映射文件中， 此后，只要在Apache服务器配置文件中增加下列行，即可：
+
+RewriteLog   /path/to/file/rewrite.log
+RewriteMap   real-to-user               txt:/path/to/file/map.txt
+RewriteRule  ^/([^/]+)/~([^/]+)/(.*)$   /u/${real-to-user:$2|nobody}/$3.$1
+

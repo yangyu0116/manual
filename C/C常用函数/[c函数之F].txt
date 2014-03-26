@@ -1,0 +1,899 @@
+函数名: fabs 
+功 能: 返回浮点数的绝对值 
+用 法: double fabs(double x); 
+程序例: 
+
+#include <stdio.h> 
+#include <math.h> 
+
+int main(void) 
+{ 
+float number = -1234.0; 
+
+printf("number: %f absolute value: %f\n", 
+number, fabs(number)); 
+return 0; 
+} 
+
+
+函数名: farcalloc 
+功 能: 从远堆栈中申请空间 
+用 法: void far *farcalloc(unsigned long units, unsigned ling unitsz); 
+程序例: 
+#include <stdio.h> 
+#include <alloc.h> 
+#include <string.h> 
+#include <dos.h> 
+
+int main(void) 
+{ 
+char far *fptr; 
+char *str = "Hello"; 
+
+/* allocate memory for the far pointer */ 
+fptr = farcalloc(10, sizeof(char)); 
+
+/* copy "Hello" into allocated memory */ 
+/* 
+Note: movedata is used because you 
+might be in a small data model, in 
+which case a normal string copy routine 
+can not be used since it assumes the 
+pointer size is near. 
+*/ 
+movedata(FP_SEG(str), FP_OFF(str), 
+FP_SEG(fptr), FP_OFF(fptr), 
+strlen(str)); 
+
+/* display string (note the F modifier) */ 
+printf("Far string is: %Fs\n", fptr); 
+
+/* free the memory */ 
+farfree(fptr); 
+
+return 0; 
+} 
+
+
+
+
+函数名: farcoreleft 
+功 能: 返回远堆中未作用存储区大小 
+用 法: long farcoreleft(void); 
+程序例: 
+
+#include <stdio.h> 
+#include <alloc.h> 
+
+int main(void) 
+{ 
+printf("The difference between the\ 
+highest allocated block in the\ 
+far\n"); 
+printf("heap and the top of the far heap\ 
+is: %lu bytes\n", farcoreleft()); 
+
+return 0; 
+} 
+
+
+
+
+函数名: farfree 
+功 能: 从远堆中释放一块 
+用 法: void farfree(void); 
+程序例: 
+
+#include <stdio.h> 
+#include <alloc.h> 
+#include <string.h> 
+#include <dos.h> 
+
+int main(void) 
+{ 
+char far *fptr; 
+char *str = "Hello"; 
+
+/* allocate memory for the far pointer */ 
+fptr = farcalloc(10, sizeof(char)); 
+
+/* copy "Hello" into allocated memory */ 
+/* 
+Note: movedata is used because you might be in a small data model, 
+in which case a normal string copy routine can't be used since it 
+assumes the pointer size is near. 
+*/ 
+movedata(FP_SEG(str), FP_OFF(str), 
+FP_SEG(fptr), FP_OFF(fptr), 
+strlen(str)); 
+
+/* display string (note the F modifier) */ 
+printf("Far string is: %Fs\n", fptr); 
+
+/* free the memory */ 
+farfree(fptr); 
+
+return 0; 
+} 
+
+
+
+
+函数名: farmalloc 
+功 能: 从远堆中分配存储块 
+用 法: void far *farmalloc(unsigned long size); 
+程序例: 
+
+#include <stdio.h> 
+#include <alloc.h> 
+#include <string.h> 
+#include <dos.h> 
+
+int main(void) 
+{ 
+char far *fptr; 
+char *str = "Hello"; 
+
+/* allocate memory for the far pointer */ 
+fptr = farmalloc(10); 
+
+/* copy "Hello" into allocated memory */ 
+/* 
+Note: movedata is used because we might 
+be in a small data model, in which case 
+a normal string copy routine can not be 
+used since it assumes the pointer size 
+is near. 
+*/ 
+movedata(FP_SEG(str), FP_OFF(str), 
+FP_SEG(fptr), FP_OFF(fptr), 
+strlen(str)); 
+
+/* display string (note the F modifier) */ 
+printf("Far string is: %Fs\n", fptr); 
+
+/* free the memory */ 
+farfree(fptr); 
+
+return 0; 
+} 
+
+
+
+
+函数名: farrealloc 
+功 能: 调整远堆中的分配块 
+用 法: void far *farrealloc(void far *block, unsigned long newsize); 
+程序例: 
+
+#include <stdio.h> 
+#include <alloc.h> 
+
+int main(void) 
+{ 
+char far *fptr; 
+
+fptr = farmalloc(10); 
+printf("First address: %Fp\n", fptr); 
+fptr = farrealloc(fptr,20); 
+printf("New address : %Fp\n", fptr); 
+farfree(fptr); 
+return 0; 
+} 
+
+
+
+函数名: fclose 
+功 能: 关闭一个流 
+用 法: int fclose(FILE *stream); 
+程序例: 
+
+#include <string.h> 
+#include <stdio.h> 
+
+int main(void) 
+{ 
+FILE *fp; 
+char buf[11] = "0123456789"; 
+
+/* create a file containing 10 bytes */ 
+fp = fopen("DUMMY.FIL", "w"); 
+fwrite(&buf, strlen(buf), 1, fp); 
+
+/* close the file */ 
+fclose(fp); 
+return 0; 
+} 
+
+
+
+
+函数名: fcloseall 
+功 能: 关闭打开流 
+用 法: int fcloseall(void); 
+程序例: 
+
+#include <stdio.h> 
+
+int main(void) 
+{ 
+int streams_closed; 
+
+/* open two streams */ 
+fopen("DUMMY.ONE", "w"); 
+fopen("DUMMY.TWO", "w"); 
+
+/* close the open streams */ 
+streams_closed = fcloseall(); 
+
+if (streams_closed == EOF) 
+/* issue an error message */ 
+perror("Error"); 
+else 
+/* print result of fcloseall() function */ 
+printf("%d streams were closed.\n", streams_closed); 
+
+return 0; 
+} 
+
+
+
+函数名: fcvt 
+功 能: 把一个浮点数转换为字符串 
+用 法: char *fcvt(double value, int ndigit, int *decpt, int *sign); 
+程序例: 
+
+#include <stdlib.h> 
+#include <stdio.h> 
+#include <conio.h> 
+
+int main(void) 
+{ 
+char *string; 
+double value; 
+int dec, sign; 
+int ndig = 10; 
+
+clrscr(); 
+value = 9.876; 
+string = ecvt(value, ndig, &dec, &sign); 
+printf("string = %s dec = %d \ 
+sign = %d\n", string, dec, sign); 
+
+value = -123.45; 
+ndig= 15; 
+string = ecvt(value,ndig,&dec,&sign); 
+printf("string = %s dec = %d sign = %d\n", 
+string, dec, sign); 
+
+
+value = 0.6789e5; /* scientific 
+notation */ 
+ndig = 5; 
+string = ecvt(value,ndig,&dec,&sign); 
+printf("string = %s dec = %d\ 
+sign = %d\n", string, dec, sign); 
+
+return 0; 
+} 
+
+
+
+
+函数名: fdopen 
+功 能: 把流与一个文件句柄相接 
+用 法: FILE *fdopen(int handle, char *type); 
+程序例: 
+
+#include <sys\stat.h> 
+#include <stdio.h> 
+#include <fcntl.h> 
+#include <io.h> 
+
+int main(void) 
+{ 
+int handle; 
+FILE *stream; 
+
+/* open a file */ 
+handle = open("DUMMY.FIL", O_CREAT, 
+S_IREAD | S_IWRITE); 
+
+/* now turn the handle into a stream */ 
+stream = fdopen(handle, "w"); 
+
+if (stream == NULL) 
+printf("fdopen failed\n"); 
+else 
+{ 
+fprintf(stream, "Hello world\n"); 
+fclose(stream); 
+} 
+return 0; 
+} 
+
+
+
+函数名: feof 
+功 能: 检测流上的文件结束符 
+用 法: int feof(FILE *stream); 
+程序例: 
+
+#include <stdio.h> 
+
+int main(void) 
+{ 
+FILE *stream; 
+
+/* open a file for reading */ 
+stream = fopen("DUMMY.FIL", "r"); 
+
+/* read a character from the file */ 
+fgetc(stream); 
+
+/* check for EOF */ 
+if (feof(stream)) 
+printf("We have reached end-of-file\n"); 
+
+/* close the file */ 
+fclose(stream); 
+return 0; 
+} 
+
+
+
+函数名: ferror 
+功 能: 检测流上的错误 
+用 法: int ferror(FILE *stream); 
+程序例: 
+
+#include <stdio.h> 
+
+int main(void) 
+{ 
+FILE *stream; 
+
+/* open a file for writing */ 
+stream = fopen("DUMMY.FIL", "w"); 
+
+/* force an error condition by attempting to read */ 
+(void) getc(stream); 
+
+if (ferror(stream)) /* test for an error on the stream */ 
+{ 
+/* display an error message */ 
+printf("Error reading from DUMMY.FIL\n"); 
+
+/* reset the error and EOF indicators */ 
+clearerr(stream); 
+} 
+
+fclose(stream); 
+return 0; 
+} 
+
+
+
+
+函数名: fflush 
+功 能: 清除一个流 
+用 法: int fflush(FILE *stream); 
+程序例: 
+
+#include <string.h> 
+#include <stdio.h> 
+#include <conio.h> 
+#include <io.h> 
+
+void flush(FILE *stream); 
+
+int main(void) 
+{ 
+FILE *stream; 
+char msg[] = "This is a test"; 
+
+/* create a file */ 
+stream = fopen("DUMMY.FIL", "w"); 
+
+/* write some data to the file */ 
+fwrite(msg, strlen(msg), 1, stream); 
+
+clrscr(); 
+printf("Press any key to flush\ 
+DUMMY.FIL:"); 
+getch(); 
+
+/* flush the data to DUMMY.FIL without\ 
+closing it */ 
+flush(stream); 
+
+printf("\nFile was flushed, Press any key\ 
+to quit:"); 
+getch(); 
+return 0; 
+} 
+
+void flush(FILE *stream) 
+{ 
+int duphandle; 
+
+/* flush the stream's internal buffer */ 
+fflush(stream); 
+
+/* make a duplicate file handle */ 
+duphandle = dup(fileno(stream)); 
+
+/* close the duplicate handle to flush\ 
+the DOS buffer */ 
+close(duphandle); 
+} 
+
+
+
+
+函数名: fgetc 
+功 能: 从流中读取字符 
+用 法: int fgetc(FILE *stream); 
+程序例: 
+
+#include <string.h> 
+#include <stdio.h> 
+#include <conio.h> 
+
+int main(void) 
+{ 
+FILE *stream; 
+char string[] = "This is a test"; 
+char ch; 
+
+/* open a file for update */ 
+stream = fopen("DUMMY.FIL", "w+"); 
+
+/* write a string into the file */ 
+fwrite(string, strlen(string), 1, stream); 
+
+/* seek to the beginning of the file */ 
+fseek(stream, 0, SEEK_SET); 
+
+do 
+{ 
+/* read a char from the file */ 
+ch = fgetc(stream); 
+
+/* display the character */ 
+putch(ch); 
+} while (ch != EOF); 
+
+fclose(stream); 
+return 0; 
+} 
+
+
+
+
+函数名: fgetchar 
+功 能: 从流中读取字符 
+用 法: int fgetchar(void); 
+程序例: 
+
+#include <stdio.h> 
+
+int main(void) 
+{ 
+char ch; 
+
+/* prompt the user for input */ 
+printf("Enter a character followed by \ 
+<Enter>: "); 
+
+/* read the character from stdin */ 
+ch = fgetchar(); 
+
+/* display what was read */ 
+printf("The character read is: '%c'\n", 
+ch); 
+return 0; 
+} 
+
+
+
+
+函数名: fgetpos 
+功 能: 取得当前文件的句柄 
+用 法: int fgetpos(FILE *stream); 
+程序例: 
+
+#include <string.h> 
+#include <stdio.h> 
+
+int main(void) 
+{ 
+FILE *stream; 
+char string[] = "This is a test"; 
+fpos_t filepos; 
+
+/* open a file for update */ 
+stream = fopen("DUMMY.FIL", "w+"); 
+
+/* write a string into the file */ 
+fwrite(string, strlen(string), 1, stream); 
+
+/* report the file pointer position */ 
+fgetpos(stream, &filepos); 
+printf("The file pointer is at byte\ 
+%ld\n", filepos); 
+
+fclose(stream); 
+return 0; 
+} 
+
+
+
+
+函数名: fgets 
+功 能: 从流中读取一字符串 
+用 法: char *fgets(char *string, int n, FILE *stream); 
+程序例: 
+
+#include <string.h> 
+#include <stdio.h> 
+
+int main(void) 
+{ 
+FILE *stream; 
+char string[] = "This is a test"; 
+char msg[20]; 
+
+/* open a file for update */ 
+stream = fopen("DUMMY.FIL", "w+"); 
+
+/* write a string into the file */ 
+fwrite(string, strlen(string), 1, stream); 
+
+/* seek to the start of the file */ 
+fseek(stream, 0, SEEK_SET); 
+
+/* read a string from the file */ 
+fgets(msg, strlen(string)+1, stream); 
+
+/* display the string */ 
+printf("%s", msg); 
+
+fclose(stream); 
+return 0; 
+} 
+
+
+
+
+函数名: filelength 
+功 能: 取文件长度字节数 
+用 法: long filelength(int handle); 
+程序例: 
+
+#include <string.h> 
+#include <stdio.h> 
+#include <fcntl.h> 
+#include <io.h> 
+
+int main(void) 
+{ 
+int handle; 
+char buf[11] = "0123456789"; 
+
+/* create a file containing 10 bytes */ 
+handle = open("DUMMY.FIL", O_CREAT); 
+write(handle, buf, strlen(buf)); 
+
+/* display the size of the file */ 
+printf("file length in bytes: %ld\n", 
+filelength(handle)); 
+
+/* close the file */ 
+close(handle); 
+return 0; 
+} 
+
+
+
+函数名: fillellipse 
+功 能: 画出并填充一椭圆 
+用 法: void far fillellipse(int x, int y, int xradius, int yradius); 
+程序例: 
+
+#include <graphics.h> 
+#include <conio.h> 
+
+int main(void) 
+{ 
+int gdriver = DETECT, gmode; 
+int xcenter, ycenter, i; 
+
+initgraph(&gdriver,&gmode,""); 
+xcenter = getmaxx() / 2; 
+ycenter = getmaxy() / 2; 
+
+for (i=0; i<13; i++) 
+{ 
+setfillstyle(i,WHITE); 
+fillellipse(xcenter,ycenter,100,50); 
+getch(); 
+} 
+
+closegraph(); 
+return 0; 
+} 
+
+
+
+
+函数名: fillpoly 
+功 能: 画并填充一个多边形 
+用 法: void far fillpoly(int numpoints, int far *polypoints); 
+程序例: 
+
+#include <graphics.h> 
+#include <stdlib.h> 
+#include <stdio.h> 
+#include <conio.h> 
+
+int main(void) 
+{ 
+/* request auto detection */ 
+int gdriver = DETECT, gmode, errorcode; 
+int i, maxx, maxy; 
+
+/* our polygon array */ 
+int poly[8]; 
+
+/* initialize graphics, local variables */ 
+initgraph(&gdriver, &gmode, ""); 
+
+/* read result of initialization */ 
+errorcode = graphresult(); 
+if (errorcode != grOk) 
+/* an error occurred */ 
+{ 
+printf("Graphics error: %s\n", 
+grapherrormsg(errorcode)); 
+printf("Press any key to halt:"); 
+getch(); 
+exit(1); 
+/* terminate with an error code */ 
+} 
+
+maxx = getmaxx(); 
+maxy = getmaxy(); 
+
+poly[0] = 20; /* 1st vertext */ 
+poly[1] = maxy / 2; 
+
+poly[2] = maxx - 20; /* 2nd */ 
+poly[3] = 20; 
+
+poly[4] = maxx - 50; /* 3rd */ 
+poly[5] = maxy - 20; 
+
+/* 
+4th vertex. fillpoly automatically 
+closes the polygon. 
+*/ 
+poly[6] = maxx / 2; 
+poly[7] = maxy / 2; 
+
+/* loop through the fill patterns */ 
+for (i=EMPTY_FILL; i<USER_FILL; i++) 
+{ 
+/* set fill pattern */ 
+setfillstyle(i, getmaxcolor()); 
+
+/* draw a filled polygon */ 
+fillpoly(4, poly); 
+
+getch(); 
+} 
+
+/* clean up */ 
+closegraph(); 
+return 0; 
+} 
+
+
+
+
+函数名: findfirst, findnext 
+功 能: 搜索磁盘目录; 取得下一个匹配的findfirst模式的文件 
+用 法: int findfirst(char *pathname, struct ffblk *ffblk, int attrib); 
+int findnext(struct ffblk *ffblk); 
+程序例: 
+
+/* findnext example */ 
+
+#include <stdio.h> 
+#include <dir.h> 
+
+int main(void) 
+{ 
+struct ffblk ffblk; 
+int done; 
+printf("Directory listing of *.*\n"); 
+done = findfirst("*.*",&ffblk,0); 
+while (!done) 
+{ 
+printf(" %s\n", ffblk.ff_name); 
+done = findnext(&ffblk); 
+} 
+
+return 0; 
+} 
+
+
+
+
+函数名: floodfill 
+功 能: 填充一个有界区域 
+用 法: void far floodfill(int x, int y, int border); 
+程序例: 
+
+#include <graphics.h> 
+#include <stdlib.h> 
+#include <stdio.h> 
+#include <conio.h> 
+
+int main(void) 
+{ 
+/* request auto detection */ 
+int gdriver = DETECT, gmode, errorcode; 
+int maxx, maxy; 
+
+/* initialize graphics, local variables */ 
+initgraph(&gdriver, &gmode, ""); 
+
+/* read result of initialization */ 
+errorcode = graphresult(); 
+if (errorcode != grOk) 
+/* an error occurred */ 
+{ 
+printf("Graphics error: %s\n", 
+grapherrormsg(errorcode)); 
+printf("Press any key to halt:"); 
+getch(); 
+exit(1); 
+/* terminate with an error code */ 
+} 
+
+maxx = getmaxx(); 
+maxy = getmaxy(); 
+
+/* select drawing color */ 
+setcolor(getmaxcolor()); 
+
+/* select fill color */ 
+setfillstyle(SOLID_FILL, getmaxcolor()); 
+
+/* draw a border around the screen */ 
+rectangle(0, 0, maxx, maxy); 
+
+/* draw some circles */ 
+circle(maxx / 3, maxy /2, 50); 
+circle(maxx / 2, 20, 100); 
+circle(maxx-20, maxy-50, 75); 
+circle(20, maxy-20, 25); 
+
+/* wait for a key */ 
+getch(); 
+
+/* fill in bounded region */ 
+floodfill(2, 2, getmaxcolor()); 
+
+/* clean up */ 
+getch(); 
+closegraph(); 
+return 0; 
+} 
+
+
+
+
+函数名: floor 
+功 能: 向下舍入 
+用 法: double floor(double x); 
+程序例: 
+
+#include <stdio.h> 
+#include <math.h> 
+
+int main(void) 
+{ 
+double number = 123.54; 
+double down, up; 
+
+down = floor(number); 
+up = ceil(number); 
+
+printf("original number %10.2lf\n", 
+number); 
+printf("number rounded down %10.2lf\n", 
+down); 
+printf("number rounded up %10.2lf\n", 
+up); 
+
+return 0; 
+} 
+
+
+
+
+函数名: flushall 
+功 能: 清除所有缓冲区 
+用 法: int flushall(void); 
+程序例: 
+
+#include <stdio.h> 
+
+int main(void) 
+{ 
+FILE *stream; 
+
+/* create a file */ 
+stream = fopen("DUMMY.FIL", "w"); 
+
+/* flush all open streams */ 
+printf("%d streams were flushed.\n", 
+flushall()); 
+
+/* close the file */ 
+fclose(stream); 
+return 0; 
+} 
+
+
+
+
+函数名: fmod 
+功 能: 计算x对y的模, 即x/y的余数 
+用 法: double fmod(double x, double y); 
+程序例: 
+
+#include <stdio.h> 
+#include <math.h> 
+
+int main(void) 
+{ 
+double x = 5.0, y = 2.0; 
+double result; 
+
+result = fmod(x,y); 
+printf("The remainder of (%lf / %lf) is \ 
+%lf\n", x, y, result); 
+return 0; 
+} 
+
+
+
+
+函数名: fnmerge 
+功 能: 建立新文件名 
+用 法: void fnerge(char *path, char *drive, char *dir); 
+程序例: 
+
+#include <string.h> 
+#include <stdio.h> 
+#include <dir.h> 
+
+
+int main(void) 
+{ 
+char s[MAXPATH]; 
+char drive[MAXDRIVE]; 
+char dir[MAXDIR]; 
+char file[MAXFILE]; 
+char ext[MAXEXT]; 
+
+getcwd(s,MAXPATH); /* get the current working directory */ 
+strcat(s,"\\"); /* append on a trailing \ character */ 
+fnsplit(s,drive,dir,file,ext); /* split the string to separate elems */ 
+strcpy(file,"DATA"); 
+strcpy(ext,".TXT"); 
+fnmerge(s,drive,dir,file,ext); /* merge everything into one string */ 
+puts(s); /* di
