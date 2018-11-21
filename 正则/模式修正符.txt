@@ -1,1 +1,0 @@
-http://cn.php.net/manual/zh/reference.pcre.pattern.modifiers.php
