@@ -1,0 +1,21 @@
+本文是记录lrzsz的安装过程
+ 以下安装要用root账号来操作
+1、从下面的网站下载 lrzsz-0.12.20.tar.gz 
+wget ftp://ftp.vim.org/vol/2/metalab/distributions/tinycorelinux/8.x/armv6/tcz/src/lrzsz/lrzsz-0.12.20.tar.gz
+2、查看里面的INSTALL文档了解安装参数说明和细节
+3、解压文件
+tar zxvf lrzsz-0.12.20.tar.gz 或者（gzip -d lrzsz-0.12.20.tar.gz 然后 tar xvf lrzsz-0.12.20.tar）
+4、进入目录
+cd lrzsz-0.12.20
+5、./configure --prefix=/usr/local/lrzsz
+6、make
+7、make install
+8、建立软链接
+#cd /usr/bin 
+#ln -s /usr/local/lrzsz/bin/lrz rz 
+#ln -s /usr/local/lrzsz/bin/lsz sz
+#//如果文件存在则删除后在创建软连接
+#ln -s -f /usr/local/lrzsz/bin/xxx xx
+#ln --help  //更多参数查看帮助
+9、测试
+运行 rz 弹出SecureCRT上传窗口。
